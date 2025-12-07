@@ -96,45 +96,57 @@
         // 树形数据
         const treeData = data;
 
-        // 获取容器尺寸的函数
-        function getContainerSize() {
-            const container = document.getElementById("tree-container");
-            return {
-                width: container.clientWidth,
-                height: container.clientHeight
-            };
-        }
-
         // 设置尺寸和边距
         const margin = { top: 50, right: 120, bottom: 50, left: 120 };
-        let containerSize = getContainerSize();
-        let width = containerSize.width - margin.left - margin.right;
-        let height = containerSize.height - margin.top - margin.bottom;
+        // 使用合理的固定尺寸，不受屏幕大小影响，实际尺寸由updateSVGSize()根据图案大小决定
+        let width = 2000;  // 合理的初始宽度
+        let height = 2000; // 合理的初始高度
 
-        // 创建SVG容器
+        // 创建SVG容器（初始尺寸，后续会根据实际图案大小更新）
         const svgElement = d3.select("#tree-container")
             .append("svg")
-            .attr("width", containerSize.width)
-            .attr("height", containerSize.height);
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom);
 
         const svg = svgElement
             .append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
 
+        // 初始化变换状态
+        let currentTransform = d3.zoomIdentity;
+
+        // 创建zoom行为（需要在autoFitView之前定义）
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 3]) // 启用缩放，允许0.1到3倍的缩放
+            .filter(event => {
+                // 对于wheel事件，只有在按住Ctrl/Cmd键时才允许zoom处理（缩放）
+                // 否则阻止zoom处理，由自定义wheel处理器处理平移
+                if (event.type === "wheel") {
+                    return event.ctrlKey || event.metaKey;
+                }
+                return true; // 允许其他事件（鼠标拖拽、触摸等）
+            })
+            .on("zoom", (event) => {
+                // 应用平移和缩放
+                // 需要同时应用margin偏移和zoom的变换
+                currentTransform = event.transform;
+                // D3的zoom transform已经包含了scale，直接应用即可
+                svg.attr("transform",
+                    `translate(${margin.left + event.transform.x},${margin.top + event.transform.y}) scale(${event.transform.k})`);
+            });
+
         // 计算节点缩放比例的辅助函数（根据深度）
         function getNodeScale(depth) {
             // 每级缩小15%，根节点为1.0，第一级为0.85，第二级为0.7225，以此类推
-            const scaleFactor = 0.85;
+            const scaleFactor = 1;
             return Math.pow(scaleFactor, depth);
         }
 
         // 计算节点宽度的辅助函数（根据深度缩放）
         function getNodeWidth(d) {
-            // 检查数据是否有效
-            if (!d || !d.data || !d.data.name) {
-                return 120; // 返回默认宽度
-            }
-            const baseWidth = Math.max(120, d.data.name.length * 12);
+
+
+            const baseWidth = 120; // Math.max(120, d.data.name.length * 12);
             const scale = getNodeScale(d.depth || 0);
             return baseWidth * scale;
         }
@@ -154,49 +166,33 @@
         }
 
         // 创建树布局（使用函数来动态获取尺寸）
+        // 固定水平间距值（节点之间的最小距离）
         let treeLayout = d3.tree()
             .size([height, width])
             .separation((a, b) => {
-                // 根据节点内容计算最小间距（使用两个节点中较大的深度）
-                const maxDepth = Math.max(a.depth, b.depth);
-                const nodeHeight = getNodeHeight(maxDepth);
-                const minSpacing = nodeHeight + 10; // 节点高度 + 额外间距（进一步压缩）
-
-                // 计算两个节点的宽度
+                // 水平间距设置为两个节点中较大的宽度
                 const widthA = getNodeWidth(a);
                 const widthB = getNodeWidth(b);
-
-                // 返回足够的间距，确保节点不重叠（减小返回值以压缩间距）
-                return Math.max(0.8, minSpacing / 150); // 进一步压缩水平间距
+                const spacing = Math.max(widthA, widthB); // 使用较大的节点宽度作为间距
+                // 返回间距对应的比例值
+                // 注意：D3 tree布局的size是[height, width]，所以这里需要根据实际宽度来调整
+                // 使用一个较大的除数，让间距更紧凑
+                return spacing / 200; // 返回相对比例值
             });
-
-        // 更新树布局尺寸的函数
-        function updateTreeLayoutSize() {
-            containerSize = getContainerSize();
-            width = containerSize.width - margin.left - margin.right;
-            height = containerSize.height - margin.top - margin.bottom;
-
-            treeLayout.size([height, width]);
-
-            // 更新SVG尺寸
-            svgElement
-                .attr("width", containerSize.width)
-                .attr("height", containerSize.height);
-        }
 
         // 创建层级数据
         const root = d3.hierarchy(treeData);
         root.x0 = width / 2;
         root.y0 = 0;
 
-        // 更新根节点初始位置的函数
-        function updateRootPosition() {
-            root.x0 = width / 2;
-        }
-
         // 调整节点位置以避免重叠的函数（保持对称性）
         function adjustNodePositions(nodes) {
-            const minHorizontalSpacing = 15; // 水平方向最小间距（节点之间的间距，进一步压缩）
+            // 计算水平间距的函数，使用节点宽度
+            function getHorizontalSpacing(nodeA, nodeB) {
+                const widthA = getNodeWidth(nodeA);
+                const widthB = getNodeWidth(nodeB);
+                return Math.max(widthA, widthB); // 使用较大的节点宽度作为间距
+            }
 
             // 计算子树所需的总宽度（只包括可见的后代节点）
             function getSubtreeWidth(node) {
@@ -208,19 +204,25 @@
 
                 // 计算所有可见子树的宽度总和
                 let totalChildrenWidth = 0;
-                children.forEach(child => {
+                children.forEach((child, index) => {
                     totalChildrenWidth += getSubtreeWidth(child);
+                    // 在相邻子节点之间添加间距（使用节点宽度）
+                    if (index < children.length - 1) {
+                        const spacing = getHorizontalSpacing(child, children[index + 1]);
+                        totalChildrenWidth += spacing;
+                    }
                 });
-                totalChildrenWidth += minHorizontalSpacing * (children.length - 1);
 
                 // 返回当前节点宽度和子树宽度的较大值
                 return Math.max(getNodeWidth(node), totalChildrenWidth);
             }
 
+            // 调整节点位置以避免重叠（参考代码的逻辑）
+            // 以父节点为中心对称分布子节点，调整x坐标
+            const minVerticalSpacing = 40; // 垂直方向最小间距
+
             // 递归调整每个节点的子节点，以父节点为中心对称分布
-            // 只处理可见的子节点（children），折叠的节点（_children）不参与位置计算
             function adjustChildren(parent) {
-                // 只获取可见的子节点，折叠的节点不参与布局计算
                 const children = parent.children || [];
                 if (children.length === 0) return;
 
@@ -232,74 +234,168 @@
                 // 按x坐标排序子节点
                 const sortedChildren = [...children].sort((a, b) => a.x - b.x);
 
-                // 计算所有子树需要的总宽度（考虑整个子树）
-                let totalWidth = 0;
-                const subtreeWidths = sortedChildren.map(child => getSubtreeWidth(child));
-                subtreeWidths.forEach(width => {
-                    totalWidth += width;
+                // 计算所有节点需要的总高度（垂直方向）
+                let totalHeight = 0;
+                const nodeHeights = sortedChildren.map(child => getNodeHeight(child.depth));
+                nodeHeights.forEach((height, index) => {
+                    totalHeight += height;
+                    // 在相邻节点之间添加间距
+                    if (index < sortedChildren.length - 1) {
+                        totalHeight += minVerticalSpacing;
+                    }
                 });
-                totalWidth += minHorizontalSpacing * (sortedChildren.length - 1);
 
-                // 以父节点为中心，对称分布子节点
+                // 以父节点的x坐标为中心，对称分布子节点
                 const parentX = parent.x;
-                let currentX = parentX - totalWidth / 2;
+                let currentX = parentX - totalHeight / 2;
 
                 sortedChildren.forEach((child, index) => {
-                    const subtreeWidth = subtreeWidths[index];
-                    const newX = currentX + subtreeWidth / 2;
+                    const nodeHeight = nodeHeights[index];
+                    const newX = currentX + nodeHeight / 2;
 
-                    // 计算需要移动的距离
+                    // 计算需要移动的距离（垂直方向，即x坐标）
                     const shift = newX - child.x;
 
                     if (Math.abs(shift) > 0.1) {
                         // 移动节点及其整个子树
                         child.x = newX;
-                        shiftSubtree(child, shift);
+                        shiftSubtree(child, shift, 0);
                     }
 
                     // 更新下一个节点的起始位置
-                    currentX += subtreeWidth + minHorizontalSpacing;
+                    if (index < sortedChildren.length - 1) {
+                        currentX += nodeHeight + minVerticalSpacing;
+                    } else {
+                        currentX += nodeHeight;
+                    }
                 });
+
+                // 调整完子节点后，更新父节点的x坐标为所有子节点的中心
+                if (sortedChildren.length > 0) {
+                    const minChildX = Math.min(...sortedChildren.map(c => c.x));
+                    const maxChildX = Math.max(...sortedChildren.map(c => c.x));
+                    const childrenCenterX = (minChildX + maxChildX) / 2;
+                    parent.x = childrenCenterX;
+                }
+            }
+
+            // 递归更新所有父节点的x坐标，使其位于子节点的中心
+            function updateParentPositions(nodes) {
+                // 从最深层开始向上遍历
+                const maxDepth = Math.max(...nodes.map(n => n.depth));
+
+                for (let depth = maxDepth; depth >= 0; depth--) {
+                    const nodesAtDepth = nodes.filter(n => n.depth === depth);
+
+                    nodesAtDepth.forEach(node => {
+                        const children = node.children || [];
+                        if (children.length > 0) {
+                            // 计算所有子节点的x坐标范围
+                            const childXValues = children.map(c => c.x);
+                            const minChildX = Math.min(...childXValues);
+                            const maxChildX = Math.max(...childXValues);
+                            const childrenCenterX = (minChildX + maxChildX) / 2;
+
+                            // 更新父节点的x坐标
+                            const shift = childrenCenterX - node.x;
+                            if (Math.abs(shift) > 0.1) {
+                                node.x = childrenCenterX;
+                                // 不需要移动子树，因为子节点已经调整好了
+                            }
+                        }
+                    });
+                }
             }
 
             // 从根节点开始调整
             const rootNode = nodes.find(d => d.depth === 0);
             if (rootNode) {
                 adjustChildren(rootNode);
+            }
 
-                // 计算整个树的边界，确保根节点在树的中心
-                let minX = Infinity, maxX = -Infinity;
-                nodes.forEach(d => {
-                    const nodeWidth = getNodeWidth(d);
-                    minX = Math.min(minX, d.x - nodeWidth / 2);
-                    maxX = Math.max(maxX, d.x + nodeWidth / 2);
+            // 递归更新所有父节点的x坐标，使其位于子节点的中心
+            updateParentPositions(nodes);
+
+            // 检查并修复整个层的节点重叠
+            // 因为不同父节点的子节点可能会重叠，需要统一调整
+            function fixLayerOverlaps(nodes) {
+                // 按深度分组节点
+                const nodesByDepth = {};
+                nodes.forEach(node => {
+                    if (!nodesByDepth[node.depth]) {
+                        nodesByDepth[node.depth] = [];
+                    }
+                    nodesByDepth[node.depth].push(node);
                 });
 
-                const treeCenter = (minX + maxX) / 2;
-                const rootX = rootNode.x;
-                const shift = treeCenter - rootX;
+                // 为每一层检查并修复重叠
+                Object.keys(nodesByDepth).sort((a, b) => parseInt(a) - parseInt(b)).forEach(depth => {
+                    const layerNodes = nodesByDepth[depth];
+                    if (layerNodes.length <= 1) return;
 
-                // 如果根节点不在树的中心，移动整个树使根节点居中
-                if (Math.abs(shift) > 0.1) {
-                    nodes.forEach(d => {
-                        d.x += shift;
-                    });
-                }
+                    const spacing = 40; // 固定的垂直间距
+                    let hasOverlap = true;
+                    let iterations = 0;
+                    const maxIterations = 20; // 最大迭代次数
+
+                    // 多次迭代，直到没有重叠
+                    while (hasOverlap && iterations < maxIterations) {
+                        hasOverlap = false;
+                        iterations++;
+
+                        // 按x坐标排序
+                        const sortedNodes = [...layerNodes].sort((a, b) => a.x - b.x);
+
+                        // 检查并修复重叠
+                        for (let i = 0; i < sortedNodes.length - 1; i++) {
+                            const currentNode = sortedNodes[i];
+                            const nextNode = sortedNodes[i + 1];
+
+                            const currentNodeHeight = getNodeHeight(currentNode.depth);
+                            const nextNodeHeight = getNodeHeight(nextNode.depth);
+
+                            // 计算最小距离（两个节点的半高 + 间距）
+                            const minDistance = currentNodeHeight / 2 + spacing + nextNodeHeight / 2;
+                            const currentDistance = nextNode.x - currentNode.x;
+
+                            // 如果距离小于最小距离，需要调整
+                            if (currentDistance < minDistance) {
+                                hasOverlap = true;
+                                const shift = minDistance - currentDistance;
+                                const newX = currentNode.x + minDistance;
+
+                                // 移动节点及其整个子树
+                                nextNode.x = newX;
+                                shiftSubtree(nextNode, shift, 0);
+                            }
+                        }
+                    }
+                });
             }
+
+            // 修复整个层的节点重叠
+            fixLayerOverlaps(nodes);
+
+            // 修复重叠后，再次更新所有父节点的x坐标
+            updateParentPositions(nodes);
         }
 
         // 移动整个子树的辅助函数
-        function shiftSubtree(node, shift) {
+        // shiftX: 垂直方向移动（x坐标）
+        // shiftY: 水平方向移动（y坐标）
+        function shiftSubtree(node, shiftX = 0, shiftY = 0) {
             if (node.children) {
                 node.children.forEach(child => {
-                    child.x += shift;
-                    shiftSubtree(child, shift);
+                    if (shiftX !== 0) child.x += shiftX;
+                    if (shiftY !== 0) child.y += shiftY;
+                    shiftSubtree(child, shiftX, shiftY);
                 });
             }
             if (node._children) {
                 node._children.forEach(child => {
-                    child.x += shift;
-                    shiftSubtree(child, shift);
+                    if (shiftX !== 0) child.x += shiftX;
+                    if (shiftY !== 0) child.y += shiftY;
+                    shiftSubtree(child, shiftX, shiftY);
                 });
             }
         }
@@ -325,29 +421,47 @@
             // 计算每层的间距，考虑节点高度和缩放
             const baseNodeHeight = getNodeHeight(0);
 
-            // 计算每层的累积y位置（垂直方向，即x坐标）
+            // 计算每层的累积x位置（垂直方向）
             let currentX = 0;
             const depthMap = {};
 
-            // 先计算每层的垂直位置
+            // 固定的垂直层间距
+            const fixedVerticalSpacing = 60; // 固定的层间距
+
+            // 计算每层的垂直位置（x坐标）
             nodes.forEach(d => {
                 if (!depthMap[d.depth]) {
-                    // 计算这一层的节点高度和间距
-                    const layerHeight = getNodeHeight(d.depth);
-                    // 确保有足够的间距，避免节点重叠
-                    const layerSpacing = layerHeight + 50 * getNodeScale(d.depth);
                     depthMap[d.depth] = {
                         x: currentX,
-                        spacing: layerSpacing
+                        spacing: fixedVerticalSpacing
                     };
-                    currentX += layerSpacing;
+                    currentX += fixedVerticalSpacing;
                 }
             });
 
-            // 设置每个节点的x坐标（垂直位置）
+            // 计算每层的y位置（水平方向）
+            // y坐标只根据层数计算，每层依次增加（节点宽度 + 固定值）
+            let currentY = 0;
+            const fixedHorizontalSpacing = 80; // 固定的水平间距
+            const yDepthMap = {};
+
+            nodes.forEach(d => {
+                if (!yDepthMap[d.depth]) {
+                    // 获取该层的节点宽度（根据深度缩放）
+                    // 使用该层第一个节点的宽度作为该层的代表宽度
+                    const nodeWidth = getNodeWidth(d);
+                    // 每层的y坐标 = 上一层的y坐标 + 节点宽度 + 固定间距
+                    yDepthMap[d.depth] = {
+                        y: currentY
+                    };
+                    currentY += nodeWidth + fixedHorizontalSpacing;
+                }
+            });
+
+            // 设置每个节点的x坐标（垂直位置）和y坐标（水平位置）
             nodes.forEach(d => {
                 d.x = depthMap[d.depth].x;
-                // y坐标（水平位置）由D3 tree布局计算，保持不变
+                d.y = yDepthMap[d.depth].y; // y坐标只根据层数设置
             });
 
             // 调整节点位置以避免重叠（只调整可见节点）
@@ -440,7 +554,7 @@
 
                 // 计算中间转折点
 
-                const midY = startY + childWidth / 4;   // 水平方向的中间位置
+                const midY = startY + parentWidth / 2;   // 水平方向的中间位置
 
                 // Z型路径的4个点：起点 -> 水平移动 -> 垂直移动 -> 终点
                 const points = [
@@ -501,15 +615,8 @@
         let i = 0;
         update(root);
 
-        // 窗口大小改变时重新初始化
-        window.addEventListener('resize', () => {
-            clearTimeout(window.resizeTimer);
-            window.resizeTimer = setTimeout(() => {
-                updateTreeLayoutSize();
-                updateRootPosition();
-                update(root);
-            }, 250);
-        });
+        // 窗口大小改变时不再重新计算树布局，保持图案大小不变
+        // 如果需要，可以只更新SVG容器的显示区域，但不改变树布局尺寸
 
         // 更新SVG尺寸以适应所有节点
         function updateSVGSize() {
@@ -533,60 +640,107 @@
             });
 
             // 添加足够的边距，确保可以滑动到所有边界
-            const padding = 200;
-            const containerSize = getContainerSize();
-            const newWidth = Math.max(containerSize.width, maxX - minX + padding * 2);
-            const newHeight = Math.max(containerSize.height, maxY - minY + padding * 2);
+            const padding = 100; // 减小边距，使图像更紧凑
+            // 根据实际图案大小计算SVG尺寸，不受屏幕大小影响
+            const newWidth = maxX - minX + padding * 2;
+            const newHeight = maxY - minY + padding * 2;
 
             // 更新SVG尺寸
             svgElement
                 .attr("width", newWidth)
                 .attr("height", newHeight);
+
+            // 自动调整视图，让图像居中并缩放到合适大小
+            autoFitView();
         }
 
-        // 添加平移功能（禁用缩放，只保留滑动）
-        // 支持鼠标拖拽、触摸手势和触控板双指滑动
-        let currentTransform = d3.zoomIdentity;
+        // 自动调整视图，让图像居中并缩放到合适大小
+        function autoFitView() {
+            const nodes = treeLayout(root).descendants();
+            if (nodes.length === 0) return;
 
-        const zoom = d3.zoom()
-            .scaleExtent([1, 1]) // 禁用缩放，固定缩放比例为1
-            .filter(event => {
-                // 允许鼠标拖拽和触摸事件
-                // 对于wheel事件（触控板双指滑动），也允许但需要特殊处理
-                return true;
-            })
-            .on("zoom", (event) => {
-                // 只应用平移，不应用缩放
-                // 需要同时应用margin偏移和zoom的平移
-                currentTransform = event.transform;
-                svg.attr("transform", `translate(${margin.left + event.transform.x},${margin.top + event.transform.y})`);
+            // 计算所有节点的边界（在SVG坐标系中，不考虑margin）
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+
+            nodes.forEach(d => {
+                const nodeWidth = getNodeWidth(d);
+                const nodeHeight = getNodeHeight(d.depth);
+                // 节点在svg group中的坐标（已经考虑了margin偏移）
+                const nodeX = d.x;
+                const nodeY = d.y;
+                minX = Math.min(minX, nodeX - nodeWidth / 2);
+                maxX = Math.max(maxX, nodeX + nodeWidth / 2);
+                minY = Math.min(minY, nodeY);
+                maxY = Math.max(maxY, nodeY + nodeHeight);
             });
+
+            // 计算容器的实际大小
+            const container = document.getElementById("tree-container");
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+
+            // 计算内容的大小
+            const contentWidth = maxX - minX;
+            const contentHeight = maxY - minY;
+
+            // 如果内容为空或容器为空，不进行调整
+            if (contentWidth <= 0 || contentHeight <= 0 || containerWidth <= 0 || containerHeight <= 0) {
+                return;
+            }
+
+            // 计算缩放比例，留出一些边距（10%）
+            const scaleX = (containerWidth * 0.9) / contentWidth;
+            const scaleY = (containerHeight * 0.9) / contentHeight;
+            const scale = Math.min(scaleX, scaleY, 1); // 不放大，只缩小
+
+            // 计算内容的中心点（在svg group坐标系中）
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+
+            // 计算需要平移的距离，使内容居中
+            // 需要考虑margin偏移和缩放
+            const translateX = (containerWidth / 2 - margin.left) - centerX * scale;
+            const translateY = (containerHeight / 2 - margin.top) - centerY * scale;
+
+            // 应用变换
+            const transform = d3.zoomIdentity
+                .translate(translateX, translateY)
+                .scale(scale);
+
+            currentTransform = transform;
+            svgElement
+                .transition()
+                .duration(750)
+                .call(zoom.transform, transform);
+        }
+
+        // 添加平移功能（支持缩放和平移）
+        // 支持鼠标拖拽、触摸手势和触控板双指滑动
 
         // 将zoom绑定到SVG元素上
         svgElement.call(zoom);
 
-        // 处理触控板双指滑动（macOS）
-        // 在macOS上，双指滑动会触发wheel事件，需要转换为平移
+        // 处理双指滑动（平移）- 当没有按住Ctrl/Cmd键时
         svgElement.on("wheel", function (event) {
-            // 阻止默认滚动行为
-            event.preventDefault();
-            event.stopPropagation();
+            // 如果没有按住Ctrl/Cmd键，处理为平移（双指滑动）
+            if (!event.ctrlKey && !event.metaKey) {
+                event.preventDefault();
+                event.stopPropagation();
 
-            // 检测是否是平移操作（deltaX或deltaY有值）
-            const hasDelta = Math.abs(event.deltaX) > 0 || Math.abs(event.deltaY) > 0;
+                // 检测是否有平移值
+                const hasDelta = Math.abs(event.deltaX) > 0 || Math.abs(event.deltaY) > 0;
+                if (hasDelta) {
+                    // 更新transform，实现平移
+                    // 注意：deltaX和deltaY需要取反，因为SVG坐标系
+                    currentTransform = currentTransform.translate(-event.deltaX, -event.deltaY);
 
-            if (hasDelta) {
-                // 更新transform，实现平移
-                // 注意：deltaX和deltaY需要取反，因为SVG坐标系
-                currentTransform = currentTransform.translate(-event.deltaX, -event.deltaY);
-
-                // 应用新的transform（无动画，立即响应）
-                svgElement
-                    .transition()
-                    .duration(0)
-                    .call(zoom.transform, currentTransform);
+                    // 直接应用transform，不通过zoom.transform，避免触发zoom事件
+                    svg.attr("transform",
+                        `translate(${margin.left + currentTransform.x},${margin.top + currentTransform.y}) scale(${currentTransform.k})`);
+                }
             }
-        }, { passive: false }); // 使用非被动监听器，可以阻止默认行为
+        }, { passive: false });
 
         // 添加触摸事件支持（移动设备）
         // 禁用默认触摸行为，使用D3的zoom处理触摸手势
