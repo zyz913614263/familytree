@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>树形结构可视化(调整文字框比例)</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="./data.js"></script>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f5f7fa;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            background: white;
+            display: flex;
+            flex-direction: column;
+        }
+
+        h1 {
+            margin: 0;
+            padding: 10px 20px;
+            font-size: 1.5rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        #tree-container {
+            flex: 1;
+            width: 100%;
+            overflow: hidden;
+            background: white;
+            position: relative;
+        }
+
+        .node rect {
+            fill: #fff;
+            stroke: #4a6fa5;
+            stroke-width: 3px;
+            rx: 8;
+            ry: 8;
+        }
+
+        .node text {
+            font-weight: 500;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            /* 字体大小由JavaScript动态控制，根据节点深度缩放 */
+        }
+
+        .link {
+            fill: none;
+            stroke: #333;
+            stroke-width: 2.5px;
+            pointer-events: none;
+            /* 确保连接线不阻挡鼠标事件 */
+            opacity: 1 !important;
+            /* 强制显示连接线 */
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .btn {
+            background: #4a6fa5;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>树形结构可视化(调整文字框比例)</h1>
+        <div id="tree-container"></div>
+    </div>
+
+    <script>
+        // 树形数据
+        const treeData = data;
+
+        // 获取容器尺寸的函数
+        function getContainerSize() {
+            const container = document.getElementById("tree-container");
+            return {
+                width: container.clientWidth,
+                height: container.clientHeight
+            };
+        }
+
+        // 设置尺寸和边距
+        const margin = { top: 50, right: 120, bottom: 50, left: 120 };
+        let containerSize = getContainerSize();
+        let width = containerSize.width - margin.left - margin.right;
+        let height = containerSize.height - margin.top - margin.bottom;
+
+        // 创建SVG容器
+        const svgElement = d3.select("#tree-container")
+            .append("svg")
+            .attr("width", containerSize.width)
+            .attr("height", containerSize.height);
+
+        const svg = svgElement
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // 计算节点缩放比例的辅助函数（根据深度）
+        function getNodeScale(depth) {
+            // 每级缩小15%，根节点为1.0，第一级为0.85，第二级为0.7225，以此类推
+            const scaleFactor = 0.85;
+            return Math.pow(scaleFactor, depth);
+        }
+
+        // 计算节点宽度的辅助函数（根据深度缩放）
+        function getNodeWidth(d) {
+            // 检查数据是否有效
+            if (!d || !d.data || !d.data.name) {
+                return 120; // 返回默认宽度
+            }
+            const baseWidth = Math.max(120, d.data.name.length * 12);
+            const scale = getNodeScale(d.depth || 0);
+            return baseWidth * scale;
+        }
+
+        // 计算节点高度的辅助函数（根据深度缩放）
+        function getNodeHeight(depth = 0) {
+            const baseHeight = 60;
+            const scale = getNodeScale(depth);
+            return baseHeight * scale;
+        }
+
+        // 计算节点字体大小的辅助函数（根据深度缩放）
+        function getNodeFontSize(depth) {
+            const baseFontSize = 14;
+            const scale = getNodeScale(depth);
+            return `${baseFontSize * scale}px`; // 返回带单位的字体大小
+        }
+
+        // 创建树布局（使用函数来动态获取尺寸）
+        let treeLayout = d3.tree()
+            .size([height, width])
+            .separation((a, b) => {
+                // 根据节点内容计算最小间距（使用两个节点中较大的深度）
+                const maxDepth = Math.max(a.depth, b.depth);
+                const nodeHeight = getNodeHeight(maxDepth);
+                const minSpacing = nodeHeight + 10; // 节点高度 + 额外间距（进一步压缩）
+
+                // 计算两个节点的宽度
+                const widthA = getNodeWidth(a);
+                const widthB = getNodeWidth(b);
+
+                // 返回足够的间距，确保节点不重叠（减小返回值以压缩间距）
+                return Math.max(0.8, minSpacing / 150); // 进一步压缩水平间距
+            });
+
+        // 更新树布局尺寸的函数
+        function updateTreeLayoutSize() {
+            containerSize = getContainerSize();
+            width = containerSize.width - margin.left - margin.right;
+            height = containerSize.height - margin.top - margin.bottom;
+
+            treeLayout.size([height, width]);
+
+            // 更新SVG尺寸
+            svgElement
+                .attr("width", containerSize.width)
+                .attr("height", containerSize.height);
+        }
+
+        // 创建层级数据
+        const root = d3.hierarchy(treeData);
+        root.x0 = width / 2;
+        root.y0 = 0;
+
+        // 更新根节点初始位置的函数
+        function updateRootPosition() {
+            root.x0 = width / 2;
+        }
+
+        // 调整节点位置以避免重叠的函数（保持对称性）
+        function adjustNodePositions(nodes) {
+            const minHorizontalSpacing = 15; // 水平方向最小间距（节点之间的间距，进一步压缩）
+
+            // 计算子树所需的总宽度（只包括可见的后代节点）
+            function getSubtreeWidth(node) {
+                // 只计算可见的子节点，折叠的节点不参与宽度计算
+                const children = node.children || [];
+                if (children.length === 0) {
+                    return getNodeWidth(node);
+                }
+
+                // 计算所有可见子树的宽度总和
+                let totalChildrenWidth = 0;
+                children.forEach(child => {
+                    totalChildrenWidth += getSubtreeWidth(child);
+                });
+                totalChildrenWidth += minHorizontalSpacing * (children.length - 1);
+
+                // 返回当前节点宽度和子树宽度的较大值
+                return Math.max(getNodeWidth(node), totalChildrenWidth);
+            }
+
+            // 递归调整每个节点的子节点，以父节点为中心对称分布
+            // 只处理可见的子节点（children），折叠的节点（_children）不参与位置计算
+            function adjustChildren(parent) {
+                // 只获取可见的子节点，折叠的节点不参与布局计算
+                const children = parent.children || [];
+                if (children.length === 0) return;
+
+                // 先递归调整所有子节点的子节点
+                children.forEach(child => {
+                    adjustChildren(child);
+                });
+
+                // 按x坐标排序子节点
+                const sortedChildren = [...children].sort((a, b) => a.x - b.x);
+
+                // 计算所有子树需要的总宽度（考虑整个子树）
+                let totalWidth = 0;
+                const subtreeWidths = sortedChildren.map(child => getSubtreeWidth(child));
+                subtreeWidths.forEach(width => {
+                    totalWidth += width;
+                });
+                totalWidth += minHorizontalSpacing * (sortedChildren.length - 1);
+
+                // 以父节点为中心，对称分布子节点
+                const parentX = parent.x;
+                let currentX = parentX - totalWidth / 2;
+
+                sortedChildren.forEach((child, index) => {
+                    const subtreeWidth = subtreeWidths[index];
+                    const newX = currentX + subtreeWidth / 2;
+
+                    // 计算需要移动的距离
+                    const shift = newX - child.x;
+
+                    if (Math.abs(shift) > 0.1) {
+                        // 移动节点及其整个子树
+                        child.x = newX;
+                        shiftSubtree(child, shift);
+                    }
+
+                    // 更新下一个节点的起始位置
+                    currentX += subtreeWidth + minHorizontalSpacing;
+                });
+            }
+
+            // 从根节点开始调整
+            const rootNode = nodes.find(d => d.depth === 0);
+            if (rootNode) {
+                adjustChildren(rootNode);
+
+                // 计算整个树的边界，确保根节点在树的中心
+                let minX = Infinity, maxX = -Infinity;
+                nodes.forEach(d => {
+                    const nodeWidth = getNodeWidth(d);
+                    minX = Math.min(minX, d.x - nodeWidth / 2);
+                    maxX = Math.max(maxX, d.x + nodeWidth / 2);
+                });
+
+                const treeCenter = (minX + maxX) / 2;
+                const rootX = rootNode.x;
+                const shift = treeCenter - rootX;
+
+                // 如果根节点不在树的中心，移动整个树使根节点居中
+                if (Math.abs(shift) > 0.1) {
+                    nodes.forEach(d => {
+                        d.x += shift;
+                    });
+                }
+            }
+        }
+
+        // 移动整个子树的辅助函数
+        function shiftSubtree(node, shift) {
+            if (node.children) {
+                node.children.forEach(child => {
+                    child.x += shift;
+                    shiftSubtree(child, shift);
+                });
+            }
+            if (node._children) {
+                node._children.forEach(child => {
+                    child.x += shift;
+                    shiftSubtree(child, shift);
+                });
+            }
+        }
+
+        // 更新函数
+        function update(source) {
+            // 重新计算树布局（只考虑可见节点，折叠的节点会被自动排除）
+            const treeData = treeLayout(root);
+
+            // 获取所有可见节点（descendants会自动排除折叠的节点）
+            const nodes = treeData.descendants();
+            const links = treeData.links();
+
+            // 如果是从根节点更新，重新初始化根节点位置
+            if (source === root || source.depth === 0) {
+                root.x0 = width / 2;
+                root.y0 = 0;
+            }
+
+            // 只基于可见节点重新计算位置
+
+            // 设置节点新位置（垂直方向间距，根据深度调整）
+            // 计算每层的间距，考虑节点高度和缩放
+            const baseNodeHeight = getNodeHeight(0);
+
+            // 计算每层的累积y位置（垂直方向，即x坐标）
+            let currentX = 0;
+            const depthMap = {};
+
+            // 先计算每层的垂直位置
+            nodes.forEach(d => {
+                if (!depthMap[d.depth]) {
+                    // 计算这一层的节点高度和间距
+                    const layerHeight = getNodeHeight(d.depth);
+                    // 确保有足够的间距，避免节点重叠
+                    const layerSpacing = layerHeight + 50 * getNodeScale(d.depth);
+                    depthMap[d.depth] = {
+                        x: currentX,
+                        spacing: layerSpacing
+                    };
+                    currentX += layerSpacing;
+                }
+            });
+
+            // 设置每个节点的x坐标（垂直位置）
+            nodes.forEach(d => {
+                d.x = depthMap[d.depth].x;
+                // y坐标（水平位置）由D3 tree布局计算，保持不变
+            });
+
+            // 调整节点位置以避免重叠（只调整可见节点）
+            // adjustNodePositions函数内部会递归处理，只处理可见的子节点
+            adjustNodePositions(nodes);
+
+            // 添加节点
+            const node = svg.selectAll(".node")
+                .data(nodes, d => d.id || (d.id = ++i));
+
+            // 添加新节点
+            const nodeEnter = node.enter().append("g")
+                .attr("class", "node")
+                .attr("transform", d => `translate(${source.y0},${source.x0})`)
+                .on("click", click);
+
+            // 添加长方形节点（根据深度缩放）
+            nodeEnter.append("rect")
+                .attr("width", d => getNodeWidth(d))
+                .attr("height", d => getNodeHeight(d.depth))
+                .attr("x", d => -getNodeWidth(d) / 2)
+                .attr("y", d => -getNodeHeight(d.depth) / 2)
+                .style("fill", d => d._children ? "lightsteelblue" : "#fff");
+
+            // 添加节点文本（根据深度缩放字体）
+            nodeEnter.append("text")
+                .attr("dy", ".35em")
+                .attr("font-size", d => getNodeFontSize(d.depth))
+                .text(d => d.data.name);
+
+            // 更新节点位置和尺寸
+            const nodeUpdate = node.merge(nodeEnter)
+                .transition()
+                .duration(500)
+                .attr("transform", d => `translate(${d.y},${d.x})`);
+
+            // 更新节点矩形尺寸
+            nodeUpdate.select("rect")
+                .transition()
+                .duration(500)
+                .attr("width", d => getNodeWidth(d))
+                .attr("height", d => getNodeHeight(d.depth))
+                .attr("x", d => -getNodeWidth(d) / 2)
+                .attr("y", d => -getNodeHeight(d.depth) / 2);
+
+            // 更新节点文本字体大小
+            nodeUpdate.select("text")
+                .transition()
+                .duration(500)
+                .attr("font-size", d => getNodeFontSize(d.depth));
+
+            // 移除退出节点
+            const nodeExit = node.exit()
+                .transition()
+                .duration(500)
+                .attr("transform", d => `translate(${source.y},${source.x})`)
+                .remove();
+
+            // 添加连接线
+            const link = svg.selectAll(".link")
+                .data(links, d => d.target.id);
+
+            // 创建折线连接器（Z形：先水平，再垂直，再水平）
+            // 在D3 v7中，使用d3.line()来创建折线
+            const line = d3.line()
+                .curve(d3.curveStepAfter) // 使用折线
+                .x(d => d[0])  // x坐标
+                .y(d => d[1]); // y坐标
+
+            // 创建Z型折线路径的函数
+            const linkGenerator = (d) => {
+                // 检查数据是否有效
+                if (!d || !d.source || !d.target) {
+                    return "M 0 0";
+                }
+
+                // 获取节点宽度
+                const parentWidth = getNodeWidth(d.source);
+                const parentHeight = getNodeHeight(d.source);
+                const childWidth = getNodeWidth(d.target);
+
+                // 计算起点：父节点右边中点
+                // 注意：在垂直树中，x是垂直方向（上下），y是水平方向（左右）
+                const startX = d.source.x;                    // 父节点垂直中心
+                const startY = d.source.y + parentWidth / 2;  // 父节点右边
+
+                // 计算终点：子节点左边中点
+                const endX = d.target.x;                      // 子节点垂直中心
+                const endY = d.target.y;     // 子节点左边
+
+                // 计算中间转折点
+
+                const midY = startY + childWidth / 4;   // 水平方向的中间位置
+
+                // Z型路径的4个点：起点 -> 水平移动 -> 垂直移动 -> 终点
+                const points = [
+                    [startY, startX],    // 1. 起点：父节点右边
+                    [midY, startX],      // 2. 水平移动到中间（垂直位置不变）
+                    [midY, endX],        // 3. 垂直移动到中间，水平移动到子节点位置
+                    [endY, endX]         // 4. 终点：子节点左边
+                ];
+                return line(points);
+            };
+
+            // 添加新连接线（在节点之前插入，确保连接线在节点下方）
+            const linkEnter = link.enter().insert("path", ".node")
+                .attr("class", "link")
+                .attr("d", d => {
+                    // 初始状态：从源节点位置开始
+                    const o = { x: source.x0, y: source.y0 };
+                    return linkGenerator({ source: o, target: o });
+                });
+
+            // 更新连接线位置
+            const linkUpdate = link.merge(linkEnter);
+            linkUpdate
+                .transition()
+                .duration(500)
+                .attr("d", d => linkGenerator(d));
+
+            // 移除退出连接线
+            link.exit()
+                .transition()
+                .duration(500)
+                .remove();
+
+            // 保存旧位置
+            nodes.forEach(d => {
+                d.x0 = d.x;
+                d.y0 = d.y;
+            });
+
+            // 更新SVG尺寸以适应所有节点
+            updateSVGSize();
+        }
+
+        // 点击节点事件
+        function click(event, d) {
+            if (d.children) {
+                d._children = d.children;
+                d.children = null;
+            } else {
+                d.children = d._children;
+                d._children = null;
+            }
+            // 折叠/展开后，重新从根节点开始计算整个树的位置
+            update(root);
+        }
+
+        // 初始化
+        let i = 0;
+        update(root);
+
+        // 窗口大小改变时重新初始化
+        window.addEventListener('resize', () => {
+            clearTimeout(window.resizeTimer);
+            window.resizeTimer = setTimeout(() => {
+                updateTreeLayoutSize();
+                updateRootPosition();
+                update(root);
+            }, 250);
+        });
+
+        // 更新SVG尺寸以适应所有节点
+        function updateSVGSize() {
+            const nodes = treeLayout(root).descendants();
+            if (nodes.length === 0) return;
+
+            // 计算所有节点的边界（考虑margin偏移）
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+
+            nodes.forEach(d => {
+                const nodeWidth = getNodeWidth(d);
+                const nodeHeight = getNodeHeight(d.depth);
+                // 考虑margin偏移
+                const actualX = d.x + margin.left;
+                const actualY = d.y + margin.top;
+                minX = Math.min(minX, actualX - nodeWidth / 2);
+                maxX = Math.max(maxX, actualX + nodeWidth / 2);
+                minY = Math.min(minY, actualY);
+                maxY = Math.max(maxY, actualY + nodeHeight);
+            });
+
+            // 添加足够的边距，确保可以滑动到所有边界
+            const padding = 200;
+            const containerSize = getContainerSize();
+            const newWidth = Math.max(containerSize.width, maxX - minX + padding * 2);
+            const newHeight = Math.max(containerSize.height, maxY - minY + padding * 2);
+
+            // 更新SVG尺寸
+            svgElement
+                .attr("width", newWidth)
+                .attr("height", newHeight);
+        }
+
+        // 添加平移功能（禁用缩放，只保留滑动）
+        // 支持鼠标拖拽、触摸手势和触控板双指滑动
+        let currentTransform = d3.zoomIdentity;
+
+        const zoom = d3.zoom()
+            .scaleExtent([1, 1]) // 禁用缩放，固定缩放比例为1
+            .filter(event => {
+                // 允许鼠标拖拽和触摸事件
+                // 对于wheel事件（触控板双指滑动），也允许但需要特殊处理
+                return true;
+            })
+            .on("zoom", (event) => {
+                // 只应用平移，不应用缩放
+                // 需要同时应用margin偏移和zoom的平移
+                currentTransform = event.transform;
+                svg.attr("transform", `translate(${margin.left + event.transform.x},${margin.top + event.transform.y})`);
+            });
+
+        // 将zoom绑定到SVG元素上
+        svgElement.call(zoom);
+
+        // 处理触控板双指滑动（macOS）
+        // 在macOS上，双指滑动会触发wheel事件，需要转换为平移
+        svgElement.on("wheel", function (event) {
+            // 阻止默认滚动行为
+            event.preventDefault();
+            event.stopPropagation();
+
+            // 检测是否是平移操作（deltaX或deltaY有值）
+            const hasDelta = Math.abs(event.deltaX) > 0 || Math.abs(event.deltaY) > 0;
+
+            if (hasDelta) {
+                // 更新transform，实现平移
+                // 注意：deltaX和deltaY需要取反，因为SVG坐标系
+                currentTransform = currentTransform.translate(-event.deltaX, -event.deltaY);
+
+                // 应用新的transform（无动画，立即响应）
+                svgElement
+                    .transition()
+                    .duration(0)
+                    .call(zoom.transform, currentTransform);
+            }
+        }, { passive: false }); // 使用非被动监听器，可以阻止默认行为
+
+        // 添加触摸事件支持（移动设备）
+        // 禁用默认触摸行为，使用D3的zoom处理触摸手势
+        svgElement
+            .style("touch-action", "none") // 禁用默认触摸行为，使用自定义手势
+            .on("touchstart", function (event) {
+                // 阻止默认行为，避免页面滚动
+                // D3的zoom会自动处理单指和双指触摸
+                if (event.touches.length >= 1) {
+                    event.preventDefault();
+                }
+            })
+            .on("touchmove", function (event) {
+                // 阻止默认行为，让D3的zoom处理滑动
+                // 支持单指和双指滑动
+                if (event.touches.length >= 1) {
+                    event.preventDefault();
+                }
+            })
+            .on("touchend", function (event) {
+                // 触摸结束时也阻止默认行为
+                event.preventDefault();
+            });
+    </script>
+</body>
+
+</html>
