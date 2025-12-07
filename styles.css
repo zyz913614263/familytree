@@ -1,0 +1,146 @@
+body {
+    font-family: 'Microsoft YaHei', sans-serif;
+    margin: 0;
+    padding: 0;
+    background: #f5f7fa;
+    overflow: hidden;
+    height: 100vh;
+}
+
+.container {
+    width: 100%;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
+    background: white;
+    display: flex;
+    flex-direction: column;
+}
+
+h1 {
+    margin: 0;
+    padding: 10px 20px;
+    font-size: 1.5rem;
+    border-bottom: 1px solid #eee;
+}
+
+#tree-container {
+    flex: 1;
+    width: 100%;
+    overflow: hidden;
+    background: white;
+    position: relative;
+}
+
+.node rect {
+    fill: #fff;
+    stroke: #4a6fa5;
+    stroke-width: 3px;
+    rx: 8;
+    ry: 8;
+    transition: all 0.3s ease;
+}
+
+.node.selected rect {
+    fill: #ffd700;
+    stroke: #ff8c00;
+    stroke-width: 4px;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.node.selected text {
+    font-weight: bold;
+    fill: #333;
+}
+
+.node:hover:not(.selected) rect {
+    fill: #e8f4f8;
+    stroke: #2c5aa0;
+    stroke-width: 3.5px;
+    cursor: pointer;
+}
+
+/* 路径上的节点高亮样式 */
+.node.path-selected rect {
+    fill: #fff4e6;
+    stroke: #ff4500;
+    stroke-width: 4px;
+}
+
+.node.path-hover rect {
+    fill: #e6f7ff;
+    stroke: #00bfff;
+    stroke-width: 3.5px;
+}
+
+/* 叠加效果：同时有选中和悬浮路径高亮时 */
+.node.path-selected.path-hover rect {
+    fill: #e6ffe6;
+    stroke: #00cc00;
+    stroke-width: 5px;
+}
+
+.node:hover:not(.selected) text {
+    font-weight: 600;
+}
+
+.node.selected:hover rect {
+    fill: #ffed4e;
+    stroke: #ff7700;
+    stroke-width: 4.5px;
+    cursor: pointer;
+}
+
+.node text {
+    font-weight: 500;
+    text-anchor: middle;
+    dominant-baseline: middle;
+    /* 字体大小由JavaScript动态控制，根据节点深度缩放 */
+}
+
+.link {
+    fill: none;
+    stroke: #333;
+    stroke-width: 2.5px;
+    pointer-events: none;
+    /* 确保连接线不阻挡鼠标事件 */
+    opacity: 1 !important;
+    /* 强制显示连接线 */
+    transition: stroke 0.3s ease, stroke-width 0.3s ease;
+}
+
+.link.selected-highlight {
+    stroke: #ff4500;
+    stroke-width: 6px;
+    opacity: 1 !important;
+}
+
+.link.hover-highlight {
+    stroke: #00bfff;
+    stroke-width: 5px;
+    opacity: 1 !important;
+}
+
+/* 叠加效果：同时有选中和悬浮高亮时 */
+.link.selected-highlight.hover-highlight {
+    stroke: #00cc00;
+    stroke-width: 7px;
+    opacity: 1 !important;
+}
+
+.controls {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin: 20px 0;
+}
+
+.btn {
+    background: #4a6fa5;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+}
