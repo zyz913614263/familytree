@@ -70,6 +70,26 @@
             cursor: pointer;
         }
 
+        /* 路径上的节点高亮样式 */
+        .node.path-selected rect {
+            fill: #fff4e6;
+            stroke: #ff4500;
+            stroke-width: 4px;
+        }
+
+        .node.path-hover rect {
+            fill: #e6f7ff;
+            stroke: #00bfff;
+            stroke-width: 3.5px;
+        }
+
+        /* 叠加效果：同时有选中和悬浮路径高亮时 */
+        .node.path-selected.path-hover rect {
+            fill: #ffe6f5;
+            stroke: #ff1493;
+            stroke-width: 5px;
+        }
+
         .node:hover:not(.selected) text {
             font-weight: 600;
         }
@@ -430,12 +450,50 @@
                 .attr("height", d => getNodeHeight(d.depth))
                 .attr("x", d => -getNodeWidth(d) / 2)
                 .attr("y", d => -getNodeHeight(d.depth) / 2)
-                .style("fill", d => {
+                .style("fill", function (d) {
+                    // 检查是否有路径高亮
+                    const node = d3.select(this.parentNode);
+                    if (node.classed("path-selected") && node.classed("path-hover")) {
+                        return "#ffe6f5"; // 叠加效果
+                    }
+                    if (node.classed("path-selected")) {
+                        return "#fff4e6"; // 选中路径
+                    }
+                    if (node.classed("path-hover")) {
+                        return "#e6f7ff"; // 悬浮路径
+                    }
+                    // 默认样式
                     if (d === selectedNode) return "#ffd700";
                     return d._children ? "lightsteelblue" : "#fff";
                 })
-                .style("stroke", d => d === selectedNode ? "#ff8c00" : "#4a6fa5")
-                .style("stroke-width", d => d === selectedNode ? "4px" : "3px");
+                .style("stroke", function (d) {
+                    const node = d3.select(this.parentNode);
+                    if (node.classed("path-selected") && node.classed("path-hover")) {
+                        return "#ff1493"; // 叠加效果
+                    }
+                    if (node.classed("path-selected")) {
+                        return "#ff4500"; // 选中路径
+                    }
+                    if (node.classed("path-hover")) {
+                        return "#00bfff"; // 悬浮路径
+                    }
+                    // 默认样式
+                    return d === selectedNode ? "#ff8c00" : "#4a6fa5";
+                })
+                .style("stroke-width", function (d) {
+                    const node = d3.select(this.parentNode);
+                    if (node.classed("path-selected") && node.classed("path-hover")) {
+                        return "5px"; // 叠加效果
+                    }
+                    if (node.classed("path-selected")) {
+                        return "4px"; // 选中路径
+                    }
+                    if (node.classed("path-hover")) {
+                        return "3.5px"; // 悬浮路径
+                    }
+                    // 默认样式
+                    return d === selectedNode ? "4px" : "3px";
+                });
 
             // 更新节点文本字体大小
             nodeUpdate.select("text")
@@ -537,11 +595,68 @@
         function highlightPathToRoot(node, isSelected = true) {
             if (!node) return;
 
-            // 找到从当前节点到根节点的所有连线
+            // 找到从当前节点到根节点的所有连线和节点
             let currentNode = node;
+
+            // 先高亮当前节点
+            const currentNodeElement = svg.selectAll(".node")
+                .filter(d => d === currentNode);
+
+            if (currentNodeElement.size() > 0) {
+                const rect = currentNodeElement.select("rect");
+                if (isSelected) {
+                    currentNodeElement.classed("path-selected", true);
+                    // 直接设置样式，确保优先级
+                    rect.style("fill", "#fff4e6")
+                        .style("stroke", "#ff4500")
+                        .style("stroke-width", "4px");
+                } else {
+                    currentNodeElement.classed("path-hover", true);
+                    // 检查是否已有选中高亮
+                    const hasSelected = currentNodeElement.classed("path-selected");
+                    if (hasSelected) {
+                        // 叠加效果
+                        rect.style("fill", "#ffe6f5")
+                            .style("stroke", "#ff1493")
+                            .style("stroke-width", "5px");
+                    } else {
+                        rect.style("fill", "#e6f7ff")
+                            .style("stroke", "#00bfff")
+                            .style("stroke-width", "3.5px");
+                    }
+                }
+            }
 
             // 向上遍历到根节点
             while (currentNode && currentNode.parent) {
+                // 高亮父节点
+                const parentElement = svg.selectAll(".node")
+                    .filter(d => d === currentNode.parent);
+
+                if (parentElement.size() > 0) {
+                    const rect = parentElement.select("rect");
+                    if (isSelected) {
+                        parentElement.classed("path-selected", true);
+                        rect.style("fill", "#fff4e6")
+                            .style("stroke", "#ff4500")
+                            .style("stroke-width", "4px");
+                    } else {
+                        parentElement.classed("path-hover", true);
+                        // 检查是否已有选中高亮
+                        const hasSelected = parentElement.classed("path-selected");
+                        if (hasSelected) {
+                            // 叠加效果
+                            rect.style("fill", "#ffe6f5")
+                                .style("stroke", "#ff1493")
+                                .style("stroke-width", "5px");
+                        } else {
+                            rect.style("fill", "#e6f7ff")
+                                .style("stroke", "#00bfff")
+                                .style("stroke-width", "3.5px");
+                        }
+                    }
+                }
+
                 // 找到连接当前节点和父节点的连线
                 const link = svg.selectAll(".link")
                     .filter(d => d.target === currentNode);
@@ -561,11 +676,59 @@
         // 移除选中高亮
         function removeSelectedHighlight() {
             svg.selectAll(".link").classed("selected-highlight", false);
+            const nodes = svg.selectAll(".node.path-selected");
+            nodes.classed("path-selected", false);
+            // 恢复节点样式
+            nodes.select("rect").each(function (d) {
+                const rect = d3.select(this);
+                const node = d3.select(this.parentNode);
+                // 检查是否还有悬浮高亮
+                if (node.classed("path-hover")) {
+                    rect.style("fill", "#e6f7ff")
+                        .style("stroke", "#00bfff")
+                        .style("stroke-width", "3.5px");
+                } else {
+                    // 恢复默认样式
+                    if (d === selectedNode) {
+                        rect.style("fill", "#ffd700")
+                            .style("stroke", "#ff8c00")
+                            .style("stroke-width", "4px");
+                    } else {
+                        rect.style("fill", d._children ? "lightsteelblue" : "#fff")
+                            .style("stroke", "#4a6fa5")
+                            .style("stroke-width", "3px");
+                    }
+                }
+            });
         }
 
         // 移除悬浮高亮
         function removeHoverHighlight() {
             svg.selectAll(".link").classed("hover-highlight", false);
+            const nodes = svg.selectAll(".node.path-hover");
+            nodes.classed("path-hover", false);
+            // 恢复节点样式
+            nodes.select("rect").each(function (d) {
+                const rect = d3.select(this);
+                const node = d3.select(this.parentNode);
+                // 检查是否还有选中高亮
+                if (node.classed("path-selected")) {
+                    rect.style("fill", "#fff4e6")
+                        .style("stroke", "#ff4500")
+                        .style("stroke-width", "4px");
+                } else {
+                    // 恢复默认样式
+                    if (d === selectedNode) {
+                        rect.style("fill", "#ffd700")
+                            .style("stroke", "#ff8c00")
+                            .style("stroke-width", "4px");
+                    } else {
+                        rect.style("fill", d._children ? "lightsteelblue" : "#fff")
+                            .style("stroke", "#4a6fa5")
+                            .style("stroke-width", "3px");
+                    }
+                }
+            });
         }
 
         // 移除所有高亮（兼容旧代码）
