@@ -85,8 +85,8 @@
 
         /* 叠加效果：同时有选中和悬浮路径高亮时 */
         .node.path-selected.path-hover rect {
-            fill: #ffe6f5;
-            stroke: #ff1493;
+            fill: #e6ffe6;
+            stroke: #00cc00;
             stroke-width: 5px;
         }
 
@@ -133,7 +133,7 @@
 
         /* 叠加效果：同时有选中和悬浮高亮时 */
         .link.selected-highlight.hover-highlight {
-            stroke: #ff1493;
+            stroke: #00cc00;
             stroke-width: 7px;
             opacity: 1 !important;
         }
@@ -454,7 +454,7 @@
                     // 检查是否有路径高亮
                     const node = d3.select(this.parentNode);
                     if (node.classed("path-selected") && node.classed("path-hover")) {
-                        return "#ffe6f5"; // 叠加效果
+                        return "#e6ffe6"; // 叠加效果（绿色）
                     }
                     if (node.classed("path-selected")) {
                         return "#fff4e6"; // 选中路径
@@ -469,7 +469,7 @@
                 .style("stroke", function (d) {
                     const node = d3.select(this.parentNode);
                     if (node.classed("path-selected") && node.classed("path-hover")) {
-                        return "#ff1493"; // 叠加效果
+                        return "#00cc00"; // 叠加效果（绿色）
                     }
                     if (node.classed("path-selected")) {
                         return "#ff4500"; // 选中路径
@@ -615,9 +615,9 @@
                     // 检查是否已有选中高亮
                     const hasSelected = currentNodeElement.classed("path-selected");
                     if (hasSelected) {
-                        // 叠加效果
-                        rect.style("fill", "#ffe6f5")
-                            .style("stroke", "#ff1493")
+                        // 叠加效果（绿色）
+                        rect.style("fill", "#e6ffe6")
+                            .style("stroke", "#00cc00")
                             .style("stroke-width", "5px");
                     } else {
                         rect.style("fill", "#e6f7ff")
@@ -645,9 +645,9 @@
                         // 检查是否已有选中高亮
                         const hasSelected = parentElement.classed("path-selected");
                         if (hasSelected) {
-                            // 叠加效果
-                            rect.style("fill", "#ffe6f5")
-                                .style("stroke", "#ff1493")
+                            // 叠加效果（绿色）
+                            rect.style("fill", "#e6ffe6")
+                                .style("stroke", "#00cc00")
                                 .style("stroke-width", "5px");
                         } else {
                             rect.style("fill", "#e6f7ff")
