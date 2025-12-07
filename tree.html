@@ -96,11 +96,68 @@
         // 树形数据
         const treeData = data;
 
+        // 计算树的最大深度
+        function getMaxDepth(node, currentDepth = 0) {
+            if (!node) return currentDepth;
+            if (!node.children || node.children.length === 0) {
+                return currentDepth;
+            }
+            let maxDepth = currentDepth;
+            node.children.forEach(child => {
+                const depth = getMaxDepth(child, currentDepth + 1);
+                maxDepth = Math.max(maxDepth, depth);
+            });
+            return maxDepth;
+        }
+
+        // 计算树的最大宽度（估算每层的最大节点数）
+        function getMaxWidth(node) {
+            const levelCounts = {};
+
+            function countNodes(n, depth = 0) {
+                if (!levelCounts[depth]) {
+                    levelCounts[depth] = 0;
+                }
+                levelCounts[depth]++;
+
+                if (n.children) {
+                    n.children.forEach(child => {
+                        countNodes(child, depth + 1);
+                    });
+                }
+            }
+
+            countNodes(node);
+
+            // 返回最大层级的节点数
+            const counts = Object.values(levelCounts);
+            return counts.length > 0 ? Math.max(...counts) : 1;
+        }
+
+        // 根据数据计算树的深度和宽度
+        const maxDepth = getMaxDepth(treeData);
+        const maxWidthNodes = getMaxWidth(treeData);
+
         // 设置尺寸和边距
         const margin = { top: 50, right: 120, bottom: 50, left: 120 };
-        // 使用合理的固定尺寸，不受屏幕大小影响，实际尺寸由updateSVGSize()根据图案大小决定
-        let width = 2000;  // 合理的初始宽度
-        let height = 2000; // 合理的初始高度
+
+        // 根据层数动态计算尺寸
+        // 注意：D3 tree布局的size是[height, width]，其中height对应x坐标（垂直方向），width对应y坐标（水平方向）
+        // 但y坐标是手动设置的，每层增加240像素
+
+        // height: 用于D3 tree布局的x坐标范围（垂直方向），需要足够大以容纳所有节点
+        // 根据最大节点数和节点宽度估算（每个节点约120像素宽，加上间距）
+        const nodeWidth = 120;
+        const nodeSpacing = 50; // 节点之间的间距
+        const estimatedHeight = maxWidthNodes * (nodeWidth + nodeSpacing);
+        const baseHeight = 1000; // 基础高度
+        let height = Math.max(baseHeight, estimatedHeight);
+
+        // width: 用于D3 tree布局的y坐标范围（水平方向），但y坐标是手动设置的
+        // 根据y坐标间距计算（每层240像素）
+        const fixedYSpacing = 120 * 2; // y坐标每层增加的固定值
+        const baseWidth = 200; // 基础宽度
+        let width = baseWidth + maxDepth * fixedYSpacing;
 
         // 创建SVG容器（初始尺寸，后续会根据实际图案大小更新）
         const svgElement = d3.select("#tree-container")
@@ -151,8 +208,6 @@
 
         // 计算节点宽度的辅助函数（根据深度缩放）
         function getNodeWidth(d) {
-
-
             const baseWidth = 120; // Math.max(120, d.data.name.length * 12);
             const scale = getNodeScale(d.depth || 0);
             return baseWidth * scale;
@@ -176,16 +231,16 @@
         // 固定水平间距值（节点之间的最小距离）
         let treeLayout = d3.tree()
             .size([height, width])
-            .separation((a, b) => {
-                // 水平间距设置为两个节点中较大的宽度
-                const widthA = getNodeWidth(a);
-                const widthB = getNodeWidth(b);
-                const spacing = Math.max(widthA, widthB); // 使用较大的节点宽度作为间距
-                // 返回间距对应的比例值
-                // 注意：D3 tree布局的size是[height, width]，所以这里需要根据实际宽度来调整
-                // 使用一个较大的除数，让间距更紧凑
-                return spacing;/// 200;
-            });
+        /*.separation((a, b) => {
+            // 水平间距设置为两个节点中较大的宽度
+            const widthA = getNodeWidth(a);
+            const widthB = getNodeWidth(b);
+            const spacing = Math.max(widthA, widthB); // 使用较大的节点宽度作为间距
+            // 返回间距对应的比例值
+            // 注意：D3 tree布局的size是[height, width]，所以这里需要根据实际宽度来调整
+            // 使用一个较大的除数，让间距更紧凑
+            return spacing / 200;
+        });*/
 
         // 创建层级数据
         const root = d3.hierarchy(treeData);
@@ -193,7 +248,7 @@
         root.y0 = 0;
 
         // 移动整个子树的辅助函数
-        function shiftSubtree(node, shift) {
+        /*function shiftSubtree(node, shift) {
             if (node.children) {
                 node.children.forEach(child => {
                     child.x += shift;
@@ -206,7 +261,7 @@
                     shiftSubtree(child, shift);
                 });
             }
-        }
+        }*/
 
         // 更新函数
         function update(source) {
