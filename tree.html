@@ -48,6 +48,37 @@
             stroke-width: 3px;
             rx: 8;
             ry: 8;
+            transition: all 0.3s ease;
+        }
+
+        .node.selected rect {
+            fill: #ffd700;
+            stroke: #ff8c00;
+            stroke-width: 4px;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        .node.selected text {
+            font-weight: bold;
+            fill: #333;
+        }
+
+        .node:hover:not(.selected) rect {
+            fill: #e8f4f8;
+            stroke: #2c5aa0;
+            stroke-width: 3.5px;
+            cursor: pointer;
+        }
+
+        .node:hover:not(.selected) text {
+            font-weight: 600;
+        }
+
+        .node.selected:hover rect {
+            fill: #ffed4e;
+            stroke: #ff7700;
+            stroke-width: 4.5px;
+            cursor: pointer;
         }
 
         .node text {
@@ -65,6 +96,13 @@
             /* 确保连接线不阻挡鼠标事件 */
             opacity: 1 !important;
             /* 强制显示连接线 */
+            transition: stroke 0.3s ease, stroke-width 0.3s ease;
+        }
+
+        .link.highlight {
+            stroke: #ff8c00;
+            stroke-width: 4px;
+            opacity: 1 !important;
         }
 
         .controls {
@@ -174,6 +212,9 @@
 
         // 标记是否是首次加载（用于决定是否自动调整视图）
         let isFirstLoad = true;
+
+        // 当前选中的节点
+        let selectedNode = null;
 
         // 初始缩放比例设置（1.0 = 100%，0.5 = 50%，2.0 = 200%）
         // 如果设置为 null，则自动计算适合的缩放比例
@@ -309,7 +350,14 @@
             const nodeEnter = node.enter().append("g")
                 .attr("class", "node")
                 .attr("transform", d => `translate(${source.y0},${source.x0})`)
-                .on("click", click);
+                .on("click", click)
+                .on("mouseover", function (event, d) {
+                    highlightPathToRoot(d);
+                })
+                .on("mouseout", function (event, d) {
+                    removeHighlight();
+                })
+                .style("cursor", "pointer");
 
             // 添加长方形节点（根据深度缩放）
             nodeEnter.append("rect")
@@ -317,7 +365,12 @@
                 .attr("height", d => getNodeHeight(d.depth))
                 .attr("x", d => -getNodeWidth(d) / 2)
                 .attr("y", d => -getNodeHeight(d.depth) / 2)
-                .style("fill", d => d._children ? "lightsteelblue" : "#fff");
+                .style("fill", d => {
+                    if (d === selectedNode) return "#ffd700";
+                    return d._children ? "lightsteelblue" : "#fff";
+                })
+                .style("stroke", d => d === selectedNode ? "#ff8c00" : "#4a6fa5")
+                .style("stroke-width", d => d === selectedNode ? "4px" : "3px");
 
             // 添加节点文本（根据深度缩放字体）
             nodeEnter.append("text")
@@ -326,19 +379,45 @@
                 .text(d => d.data.name);
 
             // 更新节点位置和尺寸
-            const nodeUpdate = node.merge(nodeEnter)
+            const nodeUpdate = node.merge(nodeEnter);
+
+            // 设置选中状态的class（在transition之前）
+            nodeUpdate.classed("selected", d => d === selectedNode)
+                .style("cursor", "pointer")
+                .on("mouseover", function (event, d) {
+                    highlightPathToRoot(d);
+                })
+                .on("mouseout", function (event, d) {
+                    removeHighlight();
+                })
+                .style("cursor", "pointer")
+                .on("mouseover", function (event, d) {
+                    highlightPathToRoot(d);
+                })
+                .on("mouseout", function (event, d) {
+                    removeHighlight();
+                });
+
+            // 应用位置变换动画
+            nodeUpdate
                 .transition()
                 .duration(500)
                 .attr("transform", d => `translate(${d.y},${d.x})`);
 
-            // 更新节点矩形尺寸
+            // 更新节点矩形尺寸和样式
             nodeUpdate.select("rect")
                 .transition()
                 .duration(500)
                 .attr("width", d => getNodeWidth(d))
                 .attr("height", d => getNodeHeight(d.depth))
                 .attr("x", d => -getNodeWidth(d) / 2)
-                .attr("y", d => -getNodeHeight(d.depth) / 2);
+                .attr("y", d => -getNodeHeight(d.depth) / 2)
+                .style("fill", d => {
+                    if (d === selectedNode) return "#ffd700";
+                    return d._children ? "lightsteelblue" : "#fff";
+                })
+                .style("stroke", d => d === selectedNode ? "#ff8c00" : "#4a6fa5")
+                .style("stroke-width", d => d === selectedNode ? "4px" : "3px");
 
             // 更新节点文本字体大小
             nodeUpdate.select("text")
@@ -431,8 +510,49 @@
             updateSVGSize();
         }
 
+        // 高亮从节点到根节点的路径
+        function highlightPathToRoot(node) {
+            // 移除之前的高亮
+            removeHighlight();
+
+            // 找到从当前节点到根节点的所有连线
+            const pathLinks = [];
+            let currentNode = node;
+
+            // 向上遍历到根节点
+            while (currentNode && currentNode.parent) {
+                // 找到连接当前节点和父节点的连线
+                const link = svg.selectAll(".link")
+                    .filter(d => d.target === currentNode);
+
+                if (link.size() > 0) {
+                    link.classed("highlight", true);
+                }
+
+                currentNode = currentNode.parent;
+            }
+        }
+
+        // 移除所有高亮
+        function removeHighlight() {
+            svg.selectAll(".link").classed("highlight", false);
+        }
+
         // 点击节点事件
         function click(event, d) {
+            // 阻止事件冒泡，避免触发其他事件
+            event.stopPropagation();
+
+            // 切换选中状态
+            if (selectedNode === d) {
+                // 如果点击的是已选中的节点，取消选中
+                selectedNode = null;
+            } else {
+                // 选中新节点
+                selectedNode = d;
+            }
+
+            // 处理折叠/展开
             if (d.children) {
                 d._children = d.children;
                 d.children = null;
