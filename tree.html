@@ -192,121 +192,6 @@
         root.x0 = width / 2;
         root.y0 = 0;
 
-
-
-        // 调整节点位置以避免重叠的函数（保持对称性）
-        function adjustNodePositions(nodes) {
-            // 计算水平间距的函数，使用节点宽度
-            function getHorizontalSpacing(nodeA, nodeB) {
-                const widthA = getNodeWidth(nodeA);
-                const widthB = getNodeWidth(nodeB);
-                return Math.max(widthA, widthB); // 使用较大的节点宽度作为间距
-            }
-
-            // 计算子树所需的总宽度（只包括可见的后代节点）
-            function getSubtreeWidth(node) {
-                // 只计算可见的子节点，折叠的节点不参与宽度计算
-                const children = node.children || [];
-                if (children.length === 0) {
-                    return getNodeWidth(node);
-                }
-
-                // 计算所有可见子树的宽度总和
-                let totalChildrenWidth = 0;
-                children.forEach((child, index) => {
-                    totalChildrenWidth += getSubtreeWidth(child);
-                    // 在相邻子节点之间添加间距（使用节点宽度）
-                    if (index < children.length - 1) {
-                        const spacing = getHorizontalSpacing(child, children[index + 1]);
-                        totalChildrenWidth += spacing;
-                    }
-                });
-
-                // 返回当前节点宽度和子树宽度的较大值
-                return Math.max(getNodeWidth(node), totalChildrenWidth);
-            }
-
-            // 递归调整每个节点的子节点，以父节点为中心对称分布
-            // 只处理可见的子节点（children），折叠的节点（_children）不参与位置计算
-            function adjustChildren(parent) {
-                // 只获取可见的子节点，折叠的节点不参与布局计算
-                const children = parent.children || [];
-                if (children.length === 0) return;
-
-                // 先递归调整所有子节点的子节点
-                children.forEach(child => {
-                    adjustChildren(child);
-                });
-
-                // 按x坐标排序子节点
-                const sortedChildren = [...children].sort((a, b) => a.x - b.x);
-
-                // 计算所有子树需要的总宽度（考虑整个子树）
-                let totalWidth = 0;
-                const subtreeWidths = sortedChildren.map(child => getSubtreeWidth(child));
-                subtreeWidths.forEach((width, index) => {
-                    totalWidth += width;
-                    // 在相邻子节点之间添加间距（使用节点宽度）
-                    if (index < sortedChildren.length - 1) {
-                        const spacing = getHorizontalSpacing(sortedChildren[index], sortedChildren[index + 1]);
-                        totalWidth += spacing;
-                    }
-                });
-
-                // 以父节点为中心，对称分布子节点
-                const parentX = parent.x;
-                let currentX = parentX - totalWidth / 2;
-
-                sortedChildren.forEach((child, index) => {
-                    const subtreeWidth = subtreeWidths[index];
-                    const newX = currentX + subtreeWidth / 2;
-
-                    // 计算需要移动的距离
-                    const shift = newX - child.x;
-
-                    if (Math.abs(shift) > 0.1) {
-                        // 移动节点及其整个子树
-                        child.x = newX;
-                        shiftSubtree(child, shift);
-                    }
-
-                    // 更新下一个节点的起始位置
-                    // 使用相邻节点之间的间距
-                    if (index < sortedChildren.length - 1) {
-                        const spacing = getHorizontalSpacing(child, sortedChildren[index + 1]);
-                        currentX += subtreeWidth + spacing;
-                    } else {
-                        currentX += subtreeWidth;
-                    }
-                });
-            }
-
-            // 从根节点开始调整
-            const rootNode = nodes.find(d => d.depth === 0);
-            if (rootNode) {
-                adjustChildren(rootNode);
-
-                // 计算整个树的边界，确保根节点在树的中心
-                let minX = Infinity, maxX = -Infinity;
-                nodes.forEach(d => {
-                    const nodeWidth = getNodeWidth(d);
-                    minX = Math.min(minX, d.x - nodeWidth / 2);
-                    maxX = Math.max(maxX, d.x + nodeWidth / 2);
-                });
-
-                const treeCenter = (minX + maxX) / 2;
-                const rootX = rootNode.x;
-                const shift = treeCenter - rootX;
-
-                // 如果根节点不在树的中心，移动整个树使根节点居中
-                if (Math.abs(shift) > 0.1) {
-                    nodes.forEach(d => {
-                        d.x += shift;
-                    });
-                }
-            }
-        }
-
         // 移动整个子树的辅助函数
         function shiftSubtree(node, shift) {
             if (node.children) {
@@ -344,29 +229,7 @@
             // 计算每层的间距，考虑节点高度和缩放
             const baseNodeHeight = getNodeHeight(0);
 
-            // 计算每层的累积y位置（垂直方向，即x坐标）
-            let currentX = 0;
-            const depthMap = {};
-
-            // 先计算每层的垂直位置
-            // 固定的垂直层间距
-            const fixedVerticalSpacing = 60; // 固定的层间距
-
-            nodes.forEach(d => {
-                if (!depthMap[d.depth]) {
-                    // 使用固定的层间距，不依赖节点大小
-                    depthMap[d.depth] = {
-                        x: currentX,
-                        spacing: fixedVerticalSpacing
-                    };
-                    currentX += fixedVerticalSpacing;
-                }
-            });
-
-            // 设置每个节点的x坐标（垂直位置）
-            nodes.forEach(d => {
-                d.x = depthMap[d.depth].x;
-            });
+            // D3 tree布局会自动计算x坐标（垂直位置），无需手动设置
 
             // 计算并设置每个节点的y坐标（水平位置）
             // y值以根节点的y为初值，根据层数依次增加固定值
@@ -381,7 +244,7 @@
 
             // 调整节点位置以避免重叠（只调整可见节点）
             // adjustNodePositions函数内部会递归处理，只处理可见的子节点
-            adjustNodePositions(nodes);
+            //adjustNodePositions(nodes);
 
             // 添加节点
             const node = svg.selectAll(".node")
