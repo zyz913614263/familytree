@@ -359,7 +359,17 @@
             // 设置每个节点的x坐标（垂直位置）
             nodes.forEach(d => {
                 d.x = depthMap[d.depth].x;
-                // y坐标（水平位置）由D3 tree布局计算，保持不变
+            });
+
+            // 计算并设置每个节点的y坐标（水平位置）
+            // y值以根节点的y为初值，根据层数依次增加固定值
+            const rootNode = nodes.find(d => d.depth === 0);
+            const rootY = rootNode ? rootNode.y : width / 2; // 根节点的y坐标作为初值
+            const fixedYSpacing = 120; // y坐标每层增加的固定值
+
+            nodes.forEach(d => {
+                // y坐标 = 根节点的y + 层数 * 固定值
+                d.y = rootY + d.depth * fixedYSpacing * 2;
             });
 
             // 调整节点位置以避免重叠（只调整可见节点）
