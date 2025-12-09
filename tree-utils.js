@@ -1,5 +1,3 @@
-
-
 // 工具函数模块
 
 // 计算树的最大深度
@@ -40,31 +38,18 @@ function getMaxWidth(node) {
     return counts.length > 0 ? Math.max(...counts) : 1;
 }
 
-// 计算节点缩放比例的辅助函数（根据深度）
-function getNodeScale(depth) {
-    // 每级缩小15%，根节点为1.0，第一级为0.85，第二级为0.7225，以此类推
-    const scaleFactor = 1;
-    return Math.pow(scaleFactor, depth);
-}
-
-// 计算节点宽度的辅助函数（根据深度缩放）
+// 计算节点宽度的辅助函数
 function getNodeWidth(d) {
-    const baseWidth = 120; // Math.max(120, d.data.name.length * 12);
-    const scale = getNodeScale(d.depth || 0);
-    return baseWidth * scale;
+    return 120;
 }
 
-// 计算节点高度的辅助函数（根据深度缩放）
+// 计算节点高度的辅助函数
 function getNodeHeight(depth = 0) {
-    const baseHeight = 60;
-    const scale = getNodeScale(depth);
-    return baseHeight * scale;
+    return 60;
 }
 
-// 计算节点字体大小的辅助函数（根据深度缩放）
+// 计算节点字体大小的辅助函数
 function getNodeFontSize(depth) {
-    const baseFontSize = 14;
-    const scale = getNodeScale(depth);
-    return `${baseFontSize * scale}px`; // 返回带单位的字体大小
+    return "14px";
 }
 

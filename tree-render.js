@@ -15,14 +15,7 @@ function update(source) {
         root.y0 = 0;
     }
 
-    // 只基于可见节点重新计算位置
-
-    // 设置节点新位置（垂直方向间距，根据深度调整）
-    // 计算每层的间距，考虑节点高度和缩放
-    const baseNodeHeight = getNodeHeight(0);
-
     // D3 tree布局会自动计算x坐标（垂直位置），无需手动设置
-
     // 计算并设置每个节点的y坐标（水平位置）
     // y值以根节点的y为初值，根据层数依次增加固定值
     const rootNode = nodes.find(d => d.depth === 0);
@@ -33,10 +26,6 @@ function update(source) {
         // y坐标 = 根节点的y + 层数 * 固定值
         d.y = rootY + d.depth * fixedYSpacing * 2;
     });
-
-    // 调整节点位置以避免重叠（只调整可见节点）
-    // adjustNodePositions函数内部会递归处理，只处理可见的子节点
-    //adjustNodePositions(nodes);
 
     // 添加节点
     const node = svg.selectAll(".node")
@@ -194,8 +183,6 @@ function update(source) {
 
         // 获取节点宽度
         const parentWidth = getNodeWidth(d.source);
-        const parentHeight = getNodeHeight(d.source);
-        const childWidth = getNodeWidth(d.target);
 
         // 计算起点：父节点右边中点
         // 注意：在垂直树中，x是垂直方向（上下），y是水平方向（左右）
@@ -204,11 +191,10 @@ function update(source) {
 
         // 计算终点：子节点左边中点
         const endX = d.target.x;                      // 子节点垂直中心
-        const endY = d.target.y;     // 子节点左边
+        const endY = d.target.y;                     // 子节点左边
 
         // 计算中间转折点
-
-        const midY = startY + parentWidth / 2;   // 水平方向的中间位置
+        const midY = startY + parentWidth / 2;        // 水平方向的中间位置
 
         // Z型路径的4个点：起点 -> 水平移动 -> 垂直移动 -> 终点
         const points = [
@@ -256,8 +242,6 @@ function update(source) {
         highlightPathToRoot(selectedNode, true);
     }
 }
-
-// 交互模块（点击、双击、高亮等）
 
 // 高亮从节点到根节点的路径（用于选中状态）
 function highlightPathToRoot(node, isSelected = true) {
@@ -397,12 +381,6 @@ function removeHoverHighlight() {
             }
         }
     });
-}
-
-// 移除所有高亮（兼容旧代码）
-function removeHighlight() {
-    removeSelectedHighlight();
-    removeHoverHighlight();
 }
 
 // 点击节点事件（选中功能）

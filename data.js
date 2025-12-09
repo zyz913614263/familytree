@@ -166,17 +166,6 @@ function getNodeCount(node) {
 }
 
 /**
- * 获取节点的深度
- * @param {Object} node - 节点对象
- * @param {Object} root - 根节点（用于计算深度）
- * @returns {number} 节点深度
- */
-function getNodeDepth(node, root) {
-    const path = findNodePath(root, node.name);
-    return path ? path.length : 0;
-}
-
-/**
  * 导出所有节点为数组（扁平化）
  * @param {Object} root - 根节点
  * @returns {Array} 所有节点的数组
