@@ -394,6 +394,7 @@ function click(event, d) {
         selectedNode = null;
         removeSelectedHighlight(); // 取消选中时移除选中高亮
     } else {
+        removeSelectedHighlight(); // 取消选中时移除选中高亮
         // 选中新节点
         selectedNode = d;
         highlightPathToRoot(d, true); // 选中时高亮路径（选中高亮）

@@ -120,6 +120,24 @@ function init() {
             event.preventDefault();
         });
 
+    // 点击背景区域取消选中节点
+    /*svgElement.on("click", function (event) {
+        // 检查点击的目标是否是节点、连接线或它们的子元素
+        const target = event.target;
+        const isNode = target.classList.contains("node") ||
+            target.closest(".node") !== null;
+        const isLink = target.classList.contains("link") ||
+            target.closest(".link") !== null;
+
+        // 如果点击的不是节点也不是连接线（即背景区域），取消选中
+        if (!isNode && !isLink && selectedNode) {
+            selectedNode = null;
+            removeSelectedHighlight();
+            // 更新视图以移除选中状态
+            update(root);
+        }
+    });*/
+
     // 初始化树
     i = 0;
     update(root);
